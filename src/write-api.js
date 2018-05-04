@@ -2,7 +2,7 @@ const assert = require('assert')
 const ecc = require('react-native-eosjs-ecc')
 const Fcbuffer = require('fcbuffer')
 const createHash = require('create-hash')
-const {processArgs} = require('eosjs-api')
+const {processArgs} = require('react-native-eosjs-api')
 const Structs = require('./structs')
 
 module.exports = writeApiGen

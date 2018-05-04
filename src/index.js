@@ -8,12 +8,12 @@ try {
 
 const ecc = require('react-native-eosjs-ecc')
 const json = {
-  api: require('eosjs-api').api,
+  api: require('react-native-eosjs-api').api,
   schema: require('./schema')
 }
 
 const Fcbuffer = require('fcbuffer')
-const api = require('eosjs-api')
+const api = require('react-native-eosjs-api')
 
 const Structs = require('./structs')
 const AbiCache = require('./abi-cache')
