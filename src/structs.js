@@ -1,4 +1,4 @@
-const {Signature, PublicKey} = require('eosjs-ecc')
+const {Signature, PublicKey} = require('react-native-eosjs-ecc')
 const Fcbuffer = require('fcbuffer')
 const ByteBuffer = require('bytebuffer')
 const assert = require('assert')

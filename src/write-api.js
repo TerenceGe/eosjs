@@ -1,5 +1,5 @@
 const assert = require('assert')
-const ecc = require('eosjs-ecc')
+const ecc = require('react-native-eosjs-ecc')
 const Fcbuffer = require('fcbuffer')
 const createHash = require('create-hash')
 const {processArgs} = require('eosjs-api')
@@ -18,7 +18,7 @@ function writeApiGen(Network, network, structs, config) {
   const reserveFunctions = new Set(['transaction', 'contract'])
   const merge = {}
 
-  // sends transactions, also a action collecting wrapper functions 
+  // sends transactions, also a action collecting wrapper functions
   merge.transaction = writeApi.genTransaction(structs, merge)
 
   // Immediate send operations automatically calls merge.transaction
@@ -270,7 +270,7 @@ function WriteApi(Network, network, config, Transaction) {
           messageOnly: true,
           noCallback: true
         }
-      })      
+      })
       if(ret == null) {
         // double-check (code can change)
         throw new Error('Callbacks can not be used when creating a multi-action transaction')

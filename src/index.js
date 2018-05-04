@@ -6,7 +6,7 @@ try {
   }
 }
 
-const ecc = require('eosjs-ecc')
+const ecc = require('react-native-eosjs-ecc')
 const json = {
   api: require('eosjs-api').api,
   schema: require('./schema')
