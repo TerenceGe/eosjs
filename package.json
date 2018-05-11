@@ -1,6 +1,6 @@
 {
   "name": "react-native-eosjs",
-  "version": "9.0.3",
+  "version": "10.0.0",
   "description": "General purpose library for the EOS blockchain.",
   "main": "lib/index.js",
   "scripts": {
