@@ -17,6 +17,7 @@ const api = require('react-native-eosjs-api')
 
 const Structs = require('./structs')
 const AbiCache = require('./abi-cache')
+const AssetCache = require('./asset-cache')
 const writeApiGen = require('./write-api')
 const assert = require('assert')
 const format = require('./format')
@@ -63,11 +64,13 @@ Eos.Localnet = development(api.Localnet)
 // Eos.Mainnet = config => ..
 
 function createEos(config, Network, network) {
-  const abiCache = AbiCache(network, config)
-  config = Object.assign({}, config, {network, abiCache})
+  config = Object.assign({}, config, {network})
+
+  config.assetCache =AssetCache(network)
+  config.abiCache = AbiCache(network, config)
 
   if(!config.chainId) {
-    config.chainId = '00'.repeat(32)
+    config.chainId = '706a7ddd808de9fc2b8879904f3b392256c83104c1d544b38302cc07d9fca477'
   }
 
   if(config.mockTransactions != null) {
@@ -149,7 +152,7 @@ function throwOnDuplicate(o1, o2, msg) {
   If only one key is available, the blockchain API calls are skipped and that
   key is used to sign the transaction.
 */
-const defaultSignProvider = (eos, config) => ({sign, buf, transaction}) => {
+const defaultSignProvider = (eos, config) => async function({sign, buf, transaction}) {
   const {keyProvider} = config
 
   if(!keyProvider) {
@@ -160,6 +163,9 @@ const defaultSignProvider = (eos, config) => ({sign, buf, transaction}) => {
   if(typeof keyProvider === 'function') {
     keys = keyProvider({transaction})
   }
+
+  // keyProvider may return keys or Promise<keys>
+  keys = await Promise.resolve(keys)
 
   if(!Array.isArray(keys)) {
     keys = [keys]

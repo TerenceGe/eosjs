@@ -1,34 +1,25 @@
 /* eslint-env mocha */
 const assert = require('assert')
 const Fcbuffer = require('fcbuffer')
+const ByteBuffer = require('bytebuffer')
 
 const Eos = require('.')
+const AssetCache = require('./asset-cache')
 
 describe('shorthand', () => {
-
-  it('asset', () => {
-    const eos = Eos.Localnet()
-    const {types} = eos.fc
-    const AssetType = types.asset()
-
-    assertSerializer(AssetType, '1.0000 EOS')
-
-    const obj = AssetType.fromObject('1 EOS')
-    assert.equal(obj, '1.0000 EOS')
-
-    const obj2 = AssetType.fromObject({amount: 10000, symbol: 'EOS'})
-    assert.equal(obj, '1.0000 EOS')
-  })
 
   it('authority', () => {
     const eos = Eos.Localnet()
     const {authority} = eos.fc.structs
 
     const pubkey = 'EOS6MRyAjQq8ud7hVNYcfnVPJqcVpscN5So8BhtHuGYqET5GDW5CV'
-    const auth = {threshold: 1, keys: [{key: pubkey, weight: 1}], accounts: []}
+    const auth = {threshold: 1, keys: [{key: pubkey, weight: 1}]}
 
     assert.deepEqual(authority.fromObject(pubkey), auth)
-    assert.deepEqual(authority.fromObject(auth), auth)
+    assert.deepEqual(
+      authority.fromObject(auth),
+      Object.assign({}, auth, {accounts: [], waits: []})
+    )
   })
 
   it('PublicKey sorting', () => {
@@ -43,12 +34,12 @@ describe('shorthand', () => {
     const authSorted = {threshold: 1, keys: [
       {key: pubkeys[1], weight: 1},
       {key: pubkeys[0], weight: 1}
-    ], accounts: []}
+    ], accounts: [], waits: []}
 
     const authUnsorted = {threshold: 1, keys: [
       {key: pubkeys[0], weight: 1},
       {key: pubkeys[1], weight: 1}
-    ], accounts: []}
+    ], accounts: [], waits: []}
 
     // assert.deepEqual(authority.fromObject(pubkey), auth)
     assert.deepEqual(authority.fromObject(authUnsorted), authSorted)
@@ -63,31 +54,41 @@ describe('shorthand', () => {
     assertSerializer(PublicKeyType, pubkey)
   })
 
+  it('symbol', () => {
+    const eos = Eos.Localnet()
+    const {types} = eos.fc
+    const Symbol = types.symbol()
+
+    assertSerializer(Symbol, '4,SYS', '4,SYS', 'SYS')
+  })
+
+  it('extended_symbol', () => {
+    const eos = Eos.Localnet({defaults: true})
+    const esType = eos.fc.types.extended_symbol()
+    const esString = esType.toObject()
+    assertSerializer(esType, esString)
+  })
+
+  it('asset', () => {
+    const eos = Eos.Localnet()
+    const {types} = eos.fc
+    const AssetType = types.asset()
+    assertSerializer(AssetType, '1.1 4,SYS@eosio.token', '1.1000 SYS@eosio.token', '1.1000 SYS')
+  })
+
   it('extended_asset', () => {
     const eos = Eos.Localnet({defaults: true})
     const eaType = eos.fc.types.extended_asset()
     const eaString = eaType.toObject()
     assertSerializer(eaType, eaString)
-    assert.equal(eaType.toObject('1 SBL'), '1.0000 SBL@eosio')
-  })
-
-  it('symbol', () => {
-    const eos = Eos.Localnet()
-    const {types} = eos.fc
-    const AssetSymbolType = types.symbol()
-
-    assertSerializer(AssetSymbolType, 'EOS')
-
-    const obj = AssetSymbolType.fromObject('EOS')
-    const buf = Fcbuffer.toBuffer(AssetSymbolType, obj)
-    assert.equal(buf.toString('hex'), '04454f5300000000')
   })
 
   it('signature', () => {
     const eos = Eos.Localnet()
     const {types} = eos.fc
     const SignatureType = types.signature()
-    const signatureString = 'SIG_K1_Jzdpi5RCzHLGsQbpGhndXBzcFs8vT5LHAtWLMxPzBdwRHSmJkcCdVu6oqPUQn1hbGUdErHvxtdSTS1YA73BThQFwV1v4G5'
+    const signatureString = 'SIG_K1_JwxtqesXpPdaZB9fdoVyzmbWkd8tuX742EQfnQNexTBfqryt2nn9PomT5xwsVnUB4m7KqTgTBQKYf2FTYbhkB5c7Kk9EsH'
+    //const signatureString = 'SIG_K1_Jzdpi5RCzHLGsQbpGhndXBzcFs8vT5LHAtWLMxPzBdwRHSmJkcCdVu6oqPUQn1hbGUdErHvxtdSTS1YA73BThQFwV1v4G5'
     assertSerializer(SignatureType, signatureString)
   })
 
@@ -97,13 +98,13 @@ if(process.env['NODE_ENV'] === 'development') {
 
   describe('Eosio Abi', () => {
 
-    it('Eosio contract parses', (done) => {
+    it('Eosio token contract parses', (done) => {
       const eos = Eos.Localnet()
 
-      eos.contract('eosio', (error, eosio) => {
+      eos.contract('eosio.token', (error, eosio_token) => {
         assert(!error, error)
-        assert(eosio.transfer, 'eosio contract')
-        assert(eosio.issue, 'eosio contract')
+        assert(eosio_token.transfer, 'eosio.token contract')
+        assert(eosio_token.issue, 'eosio.token contract')
         done()
       })
     })
@@ -111,17 +112,17 @@ if(process.env['NODE_ENV'] === 'development') {
   })
 }
 
-describe('Message.data', () => {
+describe('Action.data', () => {
   it('json', () => {
     const eos = Eos.Localnet({forceActionDataHex: false})
     const {structs, types} = eos.fc
     const value = {
-      account: 'eosio',
+      account: 'eosio.token',
       name: 'transfer',
       data: {
         from: 'inita',
         to: 'initb',
-        quantity: '1.0000 EOS',
+        quantity: '1.0000 SYS',
         memo: ''
       },
       authorization: []
@@ -129,64 +130,28 @@ describe('Message.data', () => {
     assertSerializer(structs.action, value)
   })
 
-  it('hex', () => {
-    const eos = Eos.Localnet({forceActionDataHex: false, debug: false})
-    const {structs, types} = eos.fc
-
-    const tr = {from: 'inita', to: 'initb', quantity: '1.0000 EOS', memo: ''}
-    const hex = Fcbuffer.toBuffer(structs.transfer, tr).toString('hex')
-    // const lenPrefixHex = Number(hex.length / 2).toString(16) + hex.toString('hex')
-
-    const value = {
-      account: 'eosio',
-      name: 'transfer',
-      data: hex,
-      authorization: []
-    }
-
-    const type = structs.action
-    const obj = type.fromObject(value) // tests fromObject
-    const buf = Fcbuffer.toBuffer(type, obj) // tests appendByteBuffer
-    const obj2 = Fcbuffer.fromBuffer(type, buf) // tests fromByteBuffer
-    const obj3 = type.toObject(obj) // tests toObject
-
-    assert.deepEqual(Object.assign({}, value, {data: tr}), obj3, 'serialize object')
-    assert.deepEqual(obj3, obj2, 'serialize buffer')
-  })
-
   it('force hex', () => {
     const eos = Eos.Localnet({forceActionDataHex: true})
     const {structs, types} = eos.fc
     const value = {
-      account: 'eosio',
+      account: 'eosio.token',
       name: 'transfer',
       data: {
         from: 'inita',
         to: 'initb',
-        quantity: '1 EOS',
+        quantity: '1.0000 SYS',
         memo: ''
       },
       authorization: []
     }
-    const type = structs.action
-    const obj = type.fromObject(value) // tests fromObject
-    const buf = Fcbuffer.toBuffer(type, obj) // tests appendByteBuffer
-    const obj2 = Fcbuffer.fromBuffer(type, buf) // tests fromByteBuffer
-    const obj3 = type.toObject(obj) // tests toObject
-
-    const data = Fcbuffer.toBuffer(structs.transfer, value.data)
-    const dataHex = //Number(data.length).toString(16) +
-      data.toString('hex')
-
-    assert.deepEqual(Object.assign({}, value, {data: dataHex}), obj3, 'serialize object')
-    assert.deepEqual(obj3, obj2, 'serialize buffer')
+    assertSerializer(structs.action, value, value)
   })
 
   it('unknown type', () => {
     const eos = Eos.Localnet({forceActionDataHex: false})
     const {structs, types} = eos.fc
     const value = {
-      account: 'eosio',
+      account: 'eosio.token',
       name: 'mytype',
       data: '030a0b0c',
       authorization: []
@@ -195,12 +160,24 @@ describe('Message.data', () => {
   })
 })
 
-function assertSerializer (type, value) {
+function assertSerializer (type, value, fromObjectResult = null, toObjectResult = fromObjectResult) {
   const obj = type.fromObject(value) // tests fromObject
-  const buf = Fcbuffer.toBuffer(type, obj) // tests appendByteBuffer
+  const buf = Fcbuffer.toBuffer(type, value) // tests appendByteBuffer
   const obj2 = Fcbuffer.fromBuffer(type, buf) // tests fromByteBuffer
   const obj3 = type.toObject(obj) // tests toObject
 
-  assert.deepEqual(value, obj3, 'serialize object')
-  assert.deepEqual(obj3, obj2, 'serialize buffer')
+  if(!fromObjectResult && !toObjectResult) {
+    assert.deepEqual(value, obj3, 'serialize object')
+    assert.deepEqual(obj3, obj2, 'serialize buffer')
+    return
+  }
+
+  if(fromObjectResult) {
+    assert(fromObjectResult, obj, 'fromObjectResult')
+    assert(fromObjectResult, obj2, 'fromObjectResult')
+  }
+
+  if(toObjectResult) {
+    assert(toObjectResult, obj3, 'toObjectResult')
+  }
 }

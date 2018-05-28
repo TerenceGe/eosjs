@@ -7,194 +7,79 @@
   "public_key": "fixed_bytes33",
   "message_type": "fixed_string16",
   "symbol": "uint64",
+  "symbol_code": "uint64",
   "field_name": "string",
   "account_name": "name",
   "permission_name": "name",
-  "field_name": "string",
   "type_name": "string",
   "token_name": "name",
   "table_name": "name",
   "scope_name": "name",
   "action_name": "name",
-  "context_free_type": "bytes",
-  "fields": "field_def[]",
+  "time_point": "int64",
   "time_point_sec": "time",
-  "block_id_type": "fixed_bytes32",
+  "timestamp": "uint32",
+  "block_timestamp_type": "timestamp",
+  "block_id": "fixed_bytes32",
   "checksum_type": "fixed_bytes32",
   "checksum256_type": "fixed_bytes32",
   "checksum512_type": "fixed_bytes64",
   "checksum160_type": "fixed_bytes20",
+  "sha256": "fixed_bytes32",
+  "sha512": "fixed_bytes64",
+  "sha160": "fixed_bytes20",
   "weight_type": "uint16",
   "block_num_type": "uint32",
   "share_type": "int64",
-  "transaction_id_type": "checksum_type",
   "digest_type": "checksum_type",
   "context_free_type": "bytes",
+  "unsigned_int": "varuint32",
+  "bool": "uint8",
 
+  "extensions_type": {
+    "base": "",
+    "fields": {
+      "type": "uint16",
+      "data": "bytes"
+    }
+  },
   "transaction_header": {
     "base": "",
     "fields": {
-      "expiration": "time_point_sec",
-      "region": "uint16",
+      "expiration": "time",
       "ref_block_num": "uint16",
       "ref_block_prefix": "uint32",
-      "max_net_usage_words": "varuint32",
-      "max_kcpu_usage": "varuint32",
-      "delay_sec": "varuint32"
+      "net_usage_words": "unsigned_int",
+      "max_cpu_usage_ms": "uint8",
+      "delay_sec": "unsigned_int"
     }
   },
   "transaction": {
     "base": "transaction_header",
     "fields": {
       "context_free_actions": "action[]",
-      "actions": "action[]"
+      "actions": "action[]",
+      "transaction_extensions": "extensions_type[]"
     }
   },
-  "setabi": {
-    "base": "",
-    "type": "action",
+  "signed_transaction": {
+    "base": "transaction",
     "fields": {
-      "account": "account_name",
-      "abi": "abi_def"
-    }
-  },
-  "setcode": {
-    "base": "",
-    "type": "action",
-    "fields": {
-      "account": "account_name",
-      "vmtype": "uint8",
-      "vmversion": "uint8",
-      "code": "bytes"
-    }
-  },
-  "canceldelay": {
-    "base": "",
-    "type": "action",
-    "fields": {
-      "trx_id": "transaction_id_type"
-    }
-  },
-  "clause_pair": {
-    "base": "",
-    "fields": {
-      "id": "string",
-      "body": "string"
-    }
-  },
-  "deleteauth": {
-    "base": "",
-    "type": "action",
-    "fields": {
-      "account": "account_name",
-      "permission": "permission_name"
+      "signatures": "signature[]",
+      "context_free_data": "bytes[]"
     }
   },
   "fields": "field_def[]",
-  "key_weight": {
-    "base": "",
+  "field_def": {
     "fields": {
-      "key": "public_key",
-      "weight": "weight_type"
-    }
-  },
-  "linkauth": {
-    "base": "",
-    "type": "action",
-    "fields": {
-      "account": "account_name",
-      "code": "account_name",
-      "type": "action_name",
-      "requirement": "permission_name"
-    }
-  },
-  "newaccount": {
-    "base": "",
-    "type": "action",
-    "fields": {
-      "creator": "account_name",
-      "name": "account_name",
-      "owner": "authority",
-      "active": "authority",
-      "recovery": "authority"
-    }
-  },
-  "nonce": {
-    "base": "",
-    "type": "action",
-    "fields": {
-      "value": "string"
-    }
-  },
-  "onblock": {
-    "base": "",
-    "type": "action",
-    "fields": {
-      "header": "block_header"
-    }
-  },
-  "onerror": "bytes",
-  "passrecovery": {
-    "base": "",
-    "type": "action",
-    "fields": {
-      "account": "account_name"
-    }
-  },
-  "updateauth": {
-    "base": "",
-    "type": "action",
-    "fields": {
-      "account": "account_name",
-      "permission": "permission_name",
-      "parent": "permission_name",
-      "data": "authority",
-      "delay": "uint32"
-    }
-  },
-  "vetorecovery": {
-    "base": "",
-    "type": "action",
-    "fields": {
-      "account": "account_name"
-    }
-  },
-  "pending_recovery": {
-    "base": "",
-    "fields": {
-      "account": "name",
-      "request_id": "uint128",
-      "update": "updateauth",
-      "memo": "string"
-    }
-  },
-  "permission_level": {
-    "base": "",
-    "fields": {
-      "actor": "account_name",
-      "permission": "permission_name"
-    }
-  },
-  "permission_level_weight": {
-    "base": "",
-    "fields": {
-      "permission": "permission_level",
-      "weight": "weight_type"
-    }
-  },
-  "postrecovery": {
-    "base": "",
-    "type": "action",
-    "fields": {
-      "account": "account_name",
-      "data": "authority",
-      "memo": "string"
+      "name": "field_name",
+      "type": "type_name"
     }
   },
   "asset": {
     "fields": {
       "amount": "share_type",
-      "symbol": "symbol"
+      "sym": "symbol"
     }
   },
   "producer_key": {
@@ -207,15 +92,6 @@
     "fields": {
       "version": "uint32",
       "producers": "producer_key[]"
-    }
-  },
-  "unlinkauth": {
-    "base": "",
-    "type": "action",
-    "fields": {
-      "account": "account_name",
-      "code": "account_name",
-      "type": "action_name"
     }
   },
   "chain_config": {
@@ -234,12 +110,6 @@
       "max_inline_depth": "uint16",
       "max_inline_action_size": "uint32",
       "max_generated_transaction_size": "uint32"
-    }
-  },
-  "field_def": {
-    "fields": {
-      "name": "field_name",
-      "type": "type_name"
     }
   },
   "type_def": {
@@ -267,11 +137,11 @@
   "abi_def": {
     "base": "",
     "fields": {
+      "version": "string",
       "types": "type_def[]",
       "structs": "struct_def[]",
       "actions": "action_def[]",
-      "tables": "table_def[]",
-      "ricardian_clauses": "clause_pair[]"
+      "tables": "table_def[]"
     }
   },
   "table_def": {
@@ -301,25 +171,25 @@
       "ricardian_contract": "string"
     }
   },
-  "authority": {
-    "base": "",
-    "fields": {
-      "threshold": "uint32",
-      "keys": "key_weight[]",
-      "accounts": "permission_level_weight[]"
-    }
-  },
   "block_header": {
     "base": "",
     "fields": {
       "previous": "checksum256",
-      "timestamp": "uint32",
+      "timestamp": "timestamp",
       "transaction_mroot": "checksum256",
       "action_mroot": "checksum256",
       "block_mroot": "checksum256",
       "producer": "account_name",
       "schedule_version": "uint32",
       "new_producers": "producer_schedule?"
+    }
+  },
+  "packed_transaction": {
+    "fields": {
+      "signatures": "signature[]",
+      "compression": "uint8",
+      "packed_context_free_data": "bytes",
+      "packed_trx": "bytes"
     }
   }
 }

@@ -4,6 +4,7 @@ const Fcbuffer = require('fcbuffer')
 const createHash = require('create-hash')
 const {processArgs} = require('react-native-eosjs-api')
 const Structs = require('./structs')
+const AssetCache = require('./asset-cache')
 
 module.exports = writeApiGen
 
@@ -24,10 +25,11 @@ function writeApiGen(Network, network, structs, config) {
   // Immediate send operations automatically calls merge.transaction
   for(let type in Network.schema) {
     const schema = Network.schema[type]
-    if(schema.type !== 'action') {
+    if(schema.action == null) {
       continue
     }
-    if(reserveFunctions.has(type)) {
+    const actionName = schema.action.name
+    if(reserveFunctions.has(actionName)) {
       throw new TypeError('Conflicting Api function: ' + type)
     }
 
@@ -36,7 +38,7 @@ function writeApiGen(Network, network, structs, config) {
       continue
     }
     const definition = schemaFields(Network.schema, type)
-    merge[type] = writeApi.genMethod(type, definition, merge.transaction)
+    merge[actionName] = writeApi.genMethod(type, definition, merge.transaction, schema.action.account)
   }
 
   /**
@@ -90,9 +92,12 @@ function WriteApi(Network, network, config, Transaction) {
       for(const action of args[0].actions) {
         accounts.add(action.account)
       }
+
       const abiPromises = []
+      // Eos contract operations are cached (efficient and offline transactions)
+      const cachedCode = new Set(['eosio', 'eosio.token'])
       accounts.forEach(account => {
-        if(account !== 'eosio') { // Eos contract operations are cached (allows for offline transactions)
+        if(!cachedCode.has(account)) {
           abiPromises.push(config.abiCache.abiAsync(account))
         }
       })
@@ -159,7 +164,7 @@ function WriteApi(Network, network, config, Transaction) {
     })
   }
 
-  function genMethod(type, definition, transactionArg, account = 'eosio', name = type) {
+  function genMethod(type, definition, transactionArg, account = 'eosio.token', name = type) {
     return function (...args) {
       if (args.length === 0) {
         console.error(usage(type, definition, Network, account, config))
@@ -282,20 +287,21 @@ function WriteApi(Network, network, config, Transaction) {
     // or an object of contract names with functions under those
     for(const key in merges) {
       const value = merges[key]
+      const variableName = key.replace(/\./, '_')
       if(typeof value === 'function') {
         // Native operations (eos contract for example)
-        messageCollector[key] = wrap(value)
+        messageCollector[variableName] = wrap(value)
 
       } else if(typeof value === 'object') {
         // other contract(s) (currency contract for example)
-        if(messageCollector[key] == null) {
-          messageCollector[key] = {}
+        if(messageCollector[variableName] == null) {
+          messageCollector[variableName] = {}
         }
         for(const key2 in value) {
           if(key2 === 'transaction') {
             continue
           }
-          messageCollector[key][key2] = wrap(value[key2])
+          messageCollector[variableName][key2] = wrap(value[key2])
         }
       }
     }
@@ -375,7 +381,7 @@ function WriteApi(Network, network, config, Transaction) {
       config.transactionHeaders :
       network.createTransaction
 
-    headers(options.expireInSeconds, checkError(callback, rawTx => {
+    headers(options.expireInSeconds, checkError(callback, async function(rawTx) {
       // console.log('rawTx', rawTx)
       assert.equal(typeof rawTx, 'object', 'expecting transaction header object')
       assert.equal(typeof rawTx.expiration, 'string', 'expecting expiration: iso date time string')
@@ -386,30 +392,21 @@ function WriteApi(Network, network, config, Transaction) {
 
       rawTx.actions = arg.actions
 
-      // console.log('rawTx', JSON.stringify(rawTx,null,4))
-
       // resolve shorthand
-      // const txObject = Transaction.toObject(Transaction.fromObject(rawTx))
       const txObject = Transaction.fromObject(rawTx)
 
-      // if(txObject.context_free_cpu_bandwidth == null) {
-      //   // number of CPU usage units to bill transaction for
-      //   // eosiod getCpuEstimate does not exist, it will probably have another name
-      //   txObject.context_free_cpu_bandwidth = await eos.getCpuEstimate(txObject)
-      // }
+      // After fromObject ensure any async actions are finished
+      await AssetCache.resolve()
 
-      // console.log('txObject', JSON.stringify(txObject,null,4))
-
-      // Broadcast what is signed (instead of rawTx)
       const buf = Fcbuffer.toBuffer(Transaction, txObject)
-      const tr = Fcbuffer.fromBuffer(Transaction, buf)
+      const tr = Transaction.toObject(txObject)
 
       const transactionId  = createHash('sha256').update(buf).digest().toString('hex')
 
       let sigs = []
       if(options.sign){
         const chainIdBuf = new Buffer(config.chainId, 'hex')
-        const signBuf = Buffer.concat([chainIdBuf, buf])
+        const signBuf = Buffer.concat([chainIdBuf, buf, new Buffer(new Uint8Array(32))])
         sigs = config.signProvider({transaction: tr, buf: signBuf, sign})
         if(!Array.isArray(sigs)) {
           sigs = [sigs]
@@ -418,12 +415,11 @@ function WriteApi(Network, network, config, Transaction) {
 
       // sigs can be strings or Promises
       Promise.all(sigs).then(sigs => {
-        sigs = [].concat.apply([], sigs) //flatten arrays in array
-        // tr.signatures = sigs // replaced by packedTr
+        sigs = [].concat.apply([], sigs) // flatten arrays in array
 
         for(let i = 0; i < sigs.length; i++) {
           const sig = sigs[i]
-          // convert from hex to base58 format
+          // normalize (hex to base58 format for example)
           if(typeof sig === 'string' && sig.length === 130) {
             sigs[i] = ecc.Signature.from(sig).toString()
           }
@@ -517,8 +513,13 @@ function usage (type, definition, Network, account, config) {
   out()
 
   let struct
-  if(account === 'eosio') {
-    const {structs} = Structs({defaults: true, network: Network})
+  if(account === 'eosio.token') {
+    const {structs} = Structs(
+      Object.assign(
+        {defaults: true, network: Network},
+        config
+      )
+    )
     struct = structs[type]
 
     out('PARAMETERS')
@@ -549,7 +550,9 @@ const checkError = (parentErr, parrentRes) => (error, result) => {
     console.log('error', error)
     parentErr(error)
   } else {
-    parrentRes(result)
+    Promise.resolve(parrentRes(result)).catch(error => {
+      parentErr(error)
+    })
   }
 }
 

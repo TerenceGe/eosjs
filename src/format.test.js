@@ -2,7 +2,8 @@
 const assert = require('assert')
 const {
   encodeName, decodeName, encodeNameHex, decodeNameHex,
-  isName, UDecimalPad, UDecimalUnimply
+  isName, UDecimalPad, UDecimalUnimply,
+  parseAssetSymbol
 } = require('./format')
 
 describe('format', () => {
@@ -45,13 +46,14 @@ describe('format', () => {
 
   it('UDecimalPad', () => {
     assert.throws(() => UDecimalPad(), /value is required/)
-    assert.throws(() => UDecimalPad(1), /precision/)
     assert.throws(() => UDecimalPad('$10', 0), /invalid decimal/)
     assert.throws(() => UDecimalPad('1.1.', 0), /invalid decimal/)
     assert.throws(() => UDecimalPad('1.1,1', 0), /invalid decimal/)
     assert.throws(() => UDecimalPad('1.11', 1), /exceeds precision/)
 
     const decFixtures = [
+      {value: 1, precision: null, answer: '1'},
+
       {value: 1, precision: 0, answer: '1'},
       {value: '1', precision: 0, answer: '1'},
       {value: '1.', precision: 0, answer: '1'},
@@ -86,17 +88,17 @@ describe('format', () => {
     assert.throws(() => UDecimalUnimply('1.', 1), /invalid whole number/)
     assert.throws(() => UDecimalUnimply('.1', 1), /invalid whole number/)
     assert.throws(() => UDecimalUnimply('1.1', 1), /invalid whole number/)
-  
+
     const decFixtures = [
       {value: 1, precision: 0, answer: '1'},
       {value: '1', precision: 0, answer: '1'},
       {value: '10', precision: 0, answer: '10'},
-  
+
       {value: 1, precision: 1, answer: '0.1'},
-      {value: '10', precision: 1, answer: '1'},
-  
+      {value: '10', precision: 1, answer: '1.0'},
+
       {value: '11', precision: 2, answer: '0.11'},
-      {value: '110', precision: 2, answer: '1.1'},
+      {value: '110', precision: 2, answer: '1.10'},
       {value: '101', precision: 2, answer: '1.01'},
       {value: '0101', precision: 2, answer: '1.01'},
     ]
@@ -105,6 +107,20 @@ describe('format', () => {
       assert.equal(UDecimalUnimply(value, precision), answer, JSON.stringify(test))
     }
   })
+
+  it('parseAssetSymbol', () => {
+    assert.deepEqual(parseAssetSymbol('SYS'), {precision: null, symbol: 'SYS'})
+    assert.deepEqual(parseAssetSymbol('4,SYS'), {precision: 4, symbol: 'SYS'})
+
+    assert.throws(() => parseAssetSymbol(369), /should be string/)
+    assert.throws(() => parseAssetSymbol('4,SYS,2', 2), /precision like this/)
+    assert.throws(() => parseAssetSymbol('4,SYS', 2), /Asset symbol precision mismatch/)
+    assert.throws(() => parseAssetSymbol('-2,SYS'), /precision must be positive/)
+    assert.throws(() => parseAssetSymbol('sym'), /only uppercase/)
+    assert.throws(() => parseAssetSymbol('19,SYS'), /18 characters or less/)
+    assert.throws(() => parseAssetSymbol('TOOLONGSYM'), /7 characters or less/)
+  })
+
 })
 
 /* istanbul ignore next */

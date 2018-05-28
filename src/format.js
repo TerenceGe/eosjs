@@ -12,7 +12,8 @@ module.exports = {
   UDecimalString,
   UDecimalPad,
   UDecimalImply,
-  UDecimalUnimply
+  UDecimalUnimply,
+  parseAssetSymbol
 }
 
 function ULong(value, unsigned = true, radix = 10) {
@@ -182,11 +183,14 @@ function UDecimalString(value) {
   @example UDecimalPad(10.2, 3) === '10.200'
 
   @arg {number|string|object.toString} value
-  @arg {number} precision - number of decimal places
+  @arg {number} [precision = null] - number of decimal places (null skips padding)
   @return {string} decimal part is added and zero padded to match precision
 */
 function UDecimalPad(num, precision) {
   const value = UDecimalString(num)
+  if(precision == null) {
+    return num
+  }
   assert.equal('number', typeof precision, 'precision')
 
   const part = value.split('.')
@@ -221,6 +225,7 @@ function UDecimalUnimply(value, precision) {
   assert(value != null, 'value is required')
   value = value === 'object' && value.toString ? value.toString() : String(value)
   assert(/^\d+$/.test(value), `invalid whole number ${value}`)
+  assert(precision != null, 'precision required')
 
   // Ensure minimum length
   const pad = precision - value.length
@@ -230,5 +235,44 @@ function UDecimalUnimply(value, precision) {
 
   const dotIdx = value.length - precision
   value = `${value.slice(0, dotIdx)}.${value.slice(dotIdx)}`
-  return UDecimalString(value) // Normalize
+  return UDecimalPad(value, precision) // Normalize
+}
+
+/**
+  @arg {string} assetSymbol - 4,SYS
+  @arg {number} [precision = null] - expected precision or mismatch AssertionError
+
+  @example assert.deepEqual(parseAssetSymbol('SYS'), {precision: null, symbol: 'SYS'})
+  @example assert.deepEqual(parseAssetSymbol('4,SYS'), {precision: 4, symbol: 'SYS'})
+  @throws AssertionError
+  @throws TypeError
+*/
+function parseAssetSymbol(assetSymbol, precision = null) {
+  assert.equal(typeof assetSymbol, 'string', 'Asset symbol should be string')
+
+  if(assetSymbol.indexOf(',') === -1) {
+    assetSymbol = `,${assetSymbol}` // null precision
+  }
+  const v = assetSymbol.split(',')
+  assert(v.length === 2, `Asset symbol "${assetSymbol}" may have a precision like this: 4,SYS`)
+
+  const symbolPrecision = v[0] == '' ? null : parseInt(v[0])
+  const [symbol] = v[1].split('@') // remove contract (if exists)
+
+  if(precision != null) {
+    assert.equal(precision, symbolPrecision, 'Asset symbol precision mismatch')
+  } else {
+    precision = symbolPrecision
+  }
+
+  if(precision != null) {
+    assert.equal(typeof precision, 'number', 'precision')
+    assert(precision > -1, 'precision must be positive')
+  }
+
+  assert(/^[A-Z]+$/.test(symbol), `Asset symbol should contain only uppercase letters A-Z: ` + symbol)
+  assert(precision <= 18, `Precision should be 18 characters or less`)
+  assert(symbol.length <= 7, `Asset symbol is 7 characters or less`)
+
+  return {precision, symbol}
 }

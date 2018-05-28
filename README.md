@@ -1,16 +1,14 @@
 [![Build Status](https://travis-ci.org/EOSIO/eosjs.svg?branch=master)](https://travis-ci.org/EOSIO/eosjs)
 [![NPM](https://img.shields.io/npm/v/eosjs.svg)](https://www.npmjs.org/package/eosjs)
 
-### The current public Testnet release of eosjs is built for Dawn 2.x
-You can find the current stable branch of eos here: https://github.com/EOSIO/eos/tree/dawn-2.x
-
-Newer releases are available by running your own EOS node:
-
-| Version | [EOSIO/eosjs](/EOSIO/eosjs) | [Npm](https://www.npmjs.com/package/eosjs) | [EOSIO/eos](/EOSIO/eos) | [Docker](https://hub.docker.com/r/eosio/eos/) | Node |
+| Version | [EOSIO/eosjs](/EOSIO/eosjs) | [Npm](https://www.npmjs.com/package/eosjs) | [EOSIO/eos](/EOSIO/eos) | [Docker Hub](https://hub.docker.com/r/eosio/eos/) | Node |
 | --- | --- | --- | --- | --- | --- |
+| dawn4.2 | tag: 13.x.x | `npm install eosjs` (version 13) | tag: dawn-v4.2.0 | eosio/eos:20180526 | [local docker](https://github.com/EOSIO/eosjs/tree/master/docker) |
+| dawn4.1 | tag: 12.x.x | `npm install eosjs` (version 12) | tag: dawn-v4.1.0 | eosio/eos:20180519 | [local docker](https://github.com/EOSIO/eosjs/tree/master/docker) |
+| dawn4 | tag: 11.x.x | `npm install eosjs@dawn4` (version 11) | tag: dawn-v4.0.0 | eosio/eos:dawn-v4.0.0 | [local docker](https://github.com/EOSIO/eosjs/tree/master/docker) |
 | DAWN-2018-04-23-ALPHA | tag: 9.x.x | `npm install eosjs@dawn3` (version 9) | tag: DAWN-2018-04-23-ALPHA | eosio/eos:DAWN-2018-04-23-ALPHA | [local docker](https://github.com/EOSIO/eosjs/tree/DAWN-2018-04-23-ALPHA/docker) |
 | dawn3 | tag: 8.x.x | `npm install eosjs@8` (version 8) | tag: dawn-v3.0.0 | eosio/eos:dawn3x | [local docker](https://github.com/EOSIO/eosjs/tree/master/docker) |
-| dawn2 | branch: dawn2 | `npm install eosjs` | branch: dawn-2.x | eosio/eos:dawn2x | http or [https://t1readonly.eos.io](https://t1readonly.eos.io/v1/chain/get_info) |
+| dawn2 | branch: dawn2 | `npm install eosjs` | branch: dawn-2.x | eosio/eos:dawn2x | [local docker](https://github.com/EOSIO/eosjs/tree/master/docker) |
 
 # Eosjs
 
@@ -21,13 +19,12 @@ General purpose library for the EOS blockchain.
 ```javascript
 Eos = require('eosjs') // Eos = require('./src')
 
-// eos = Eos.Localnet() // 127.0.0.1:8888
-eos = Eos.Testnet() // testnet at eos.io
+eos = Eos.Localnet() // 127.0.0.1:8888
 
 // All API methods print help when called with no-arguments.
 eos.getBlock()
 
-// Next, your going to need nodeos running on localhost:8888
+// Next, your going to need nodeosd running on localhost:8888 (see ./docker)
 
 // If a callback is not provided, a Promise is returned
 eos.getBlock(1).then(result => {console.log(result)})
@@ -47,7 +44,7 @@ eos.getInfo({}).then(result => {console.log(result)})
 
 API methods and documentation are generated from:
 * [chain.json](https://github.com/EOSIO/eosjs-api/blob/master/src/api/v1/chain.json)
-* [account_history.json](https://github.com/EOSIO/eosjs-api/blob/master/src/api/v1/account_history.json)
+* [history.json](https://github.com/EOSIO/eosjs-api/blob/master/src/api/v1/history.json)
 
 ### Configuration
 
@@ -117,16 +114,17 @@ eos.transfer()
 
 // Usage with options (options are always optional)
 options = {broadcast: false}
-eos.transfer({from: 'inita', to: 'initb', quantity: '1 EOS', memo: ''}, options)
+
+eos.transfer({from: 'inita', to: 'initb', quantity: '1 SYS', memo: ''}, options)
 
 // Object or ordered args may be used.
-eos.transfer('inita', 'initb', '2 EOS', 'memo', options)
+eos.transfer('inita', 'initb', '2 SYS', 'memo', options)
 
 // A broadcast boolean may be provided as a shortcut for {broadcast: false}
-eos.transfer('inita', 'initb', '1 EOS', '', false)
+eos.transfer('inita', 'initb', '1 SYS', '', false)
 ```
 
-Read-write API methods and documentation are generated from the [eosio_system](https://github.com/EOSIO/eosjs/blob/master/src/schema/eosio_system.json) schema.
+Read-write API methods and documentation are generated from the [eosio_system](https://github.com/EOSIO/eosjs/blob/master/src/schema/eosio_token.json) schema.
 
 For more advanced signing, see `keyProvider` in
 [eosjs-keygen](https://github.com/eosio/eosjs-keygen) or
@@ -137,9 +135,9 @@ For more advanced signing, see `keyProvider` in
 Shorthand is available for some types such as Asset and Authority.
 
 For example:
-* deposit: `'1 EOS'` is shorthand for `1.0000 EOS`
+* stake_net_quantity: `'1 SYS'` is shorthand for `1.0000 SYS`
 * owner: `'EOS6MRy..'` is shorthand for `{threshold: 1, keys: [key: 'EOS6MRy..', weight: 1]}`
-* recovery: `inita` or `inita@active` is shorthand
+* active: `inita` or `inita@active` is shorthand for
   * `{{threshold: 1, accounts: [..actor: inita, permission: active, weight: 1]}}`
   * `inita@other` would replace the permission `active` with `other`
 
@@ -147,18 +145,30 @@ For example:
 ```javascript
 Eos = require('eosjs') // Eos = require('./src')
 
-initaPrivate = '5KQwrPbwdL6PhXujxW37FSSQZ1JiwsST4cqQzDeyXtP79zkvFD3'
-initaPublic = 'EOS6MRyAjQq8ud7hVNYcfnVPJqcVpscN5So8BhtHuGYqET5GDW5CV'
-keyProvider = initaPrivate
+wif = '5KQwrPbwdL6PhXujxW37FSSQZ1JiwsST4cqQzDeyXtP79zkvFD3'
+pubkey = 'EOS6MRyAjQq8ud7hVNYcfnVPJqcVpscN5So8BhtHuGYqET5GDW5CV'
 
-eos = Eos.Localnet({keyProvider})
+eos = Eos.Localnet({keyProvider: wif})
 
-eos.newaccount({
-  creator: 'inita',
-  name: 'mynewacct',
-  owner: initaPublic,
-  active: initaPublic,
-  recovery: 'inita'
+eos.transaction(tr => {
+  tr.newaccount({
+    creator: 'inita',
+    name: 'mycontract11',
+    owner: pubkey,
+    active: pubkey
+  })
+  tr.buyrambytes({
+    payer: 'inita',
+    receiver: 'mycontract11',
+    bytes: 8192
+  })
+  tr.delegatebw({
+    from: 'inita',
+    receiver: 'mycontract11',
+    stake_net_quantity: '100.0000 SYS',
+    stake_cpu_quantity: '100.0000 SYS',
+    transfer: 0
+  })
 })
 
 ```
@@ -185,53 +195,35 @@ Import and include the library when you configure Eos:
 
 ```javascript
 binaryen = require('binaryen')
-eos = Eos.Testnet({..., binaryen})
+eos = Eos.Localnet({..., binaryen})
 ```
 
 Complete example:
 
 ```javascript
 Eos = require('eosjs') // Eos = require('./src')
-let {ecc} = Eos.modules
 
-initaPrivate = '5KQwrPbwdL6PhXujxW37FSSQZ1JiwsST4cqQzDeyXtP79zkvFD3'
+keyProvider = '5KQwrPbwdL6PhXujxW37FSSQZ1JiwsST4cqQzDeyXtP79zkvFD3'
 
-// New deterministic key for the currency account.  Only use a simple
-// seedPrivate in production if you want to give away money.
-currencyPrivate = ecc.seedPrivate('currency')
-currencyPublic = ecc.privateToPublic(currencyPrivate)
-
-keyProvider = [initaPrivate, currencyPrivate]
-
-//  Requires a large library, separate from the eosjs bundle
+// If your loading a wasm file, you do not need binaryen.  If your loading
+// a "wast" file you can include and configure the binaryen compiler:
+//
 // $ npm install binaryen@37.0.0
-binaryen = require('binaryen')
+// binaryen = require('binaryen')
+// eos = Eos.Localnet({keyProvider, binaryen})
 
-eos = Eos.Localnet({keyProvider, binaryen})
+eos = Eos.Localnet({keyProvider})
 
-eos.newaccount({
-  creator: 'inita',
-  name: 'currency',
-  owner: currencyPublic,
-  active: currencyPublic,
-  recovery: 'inita'
-})
-
-contractDir = `${process.env.HOME}/eosio/dawn3/build/contracts/currency`
-wast = fs.readFileSync(`${contractDir}/currency.wast`)
-abi = fs.readFileSync(`${contractDir}/currency.abi`)
+wasm = fs.readFileSync(`docker/contracts/eosio.token/eosio.token.wasm`)
+abi = fs.readFileSync(`docker/contracts/eosio.token/eosio.token.abi`)
 
 // Publish contract to the blockchain
-eos.setcode('currency', 0, 0, wast)
-eos.setabi('currency', JSON.parse(abi))
+eos.setcode('inita', 0, 0, wasm)
+eos.setabi('inita', JSON.parse(abi))
 
-currency = null
-// eos.contract(account<string>, [options], [callback])
-eos.contract('currency').then(contract => currency = contract)
-
-// Issue is one of the actions in currency.abi
-currency.issue('inita', '1000.0000 CUR', {authorization: 'currency'})
-
+// Error reading contract; https://github.com/EOSIO/eos/issues/3159
+eos.contract('inita').then(c => inita = c)
+inita.create('inita', '1000.0000 CUR', {authorization: 'inita'})
 ```
 
 ### Atomic Operations
@@ -251,8 +243,8 @@ eos = Eos.Localnet({keyProvider})
 // if either transfer fails, both will fail (1 transaction, 2 messages)
 eos.transaction(eos =>
   {
-    eos.transfer('inita', 'initb', '1 EOS', '')
-    eos.transfer('inita', 'initc', '1 EOS', '')
+    eos.transfer('inita', 'initb', '1 SYS', '')
+    eos.transfer('inita', 'initc', '1 SYS', '')
     // Returning a promise is optional (but handled as expected)
   }
   // [options],
@@ -265,9 +257,9 @@ eos.transaction('currency', currency => {
 })
 
 // mix contracts in the same transaction
-eos.transaction(['currency', 'eosio'], ({currency, eosio}) => {
+eos.transaction(['currency', 'eosio.token'], ({currency, eosio_token}) => {
   currency.transfer('inita', 'initb', '1 CUR', '')
-  eosio.transfer('inita', 'initb', '1 EOS', '')
+  eosio_token.transfer('inita', 'initb', '1 SYS', '')
 })
 
 // contract lookups then transactions
@@ -297,7 +289,7 @@ eos = Eos.Localnet({keyProvider: '5KQwrPbwdL6PhXujxW37FSSQZ1JiwsST4cqQzDeyXtP79z
 eos.transaction({
   actions: [
     {
-      account: 'eosio',
+      account: 'eosio.token',
       name: 'transfer',
       authorization: [{
         actor: 'inita',
@@ -306,7 +298,7 @@ eos.transaction({
       data: {
         from: 'inita',
         to: 'initb',
-        quantity: '7 EOS',
+        quantity: '7 SYS',
         memo: ''
       }
     }
