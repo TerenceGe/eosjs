@@ -1,11 +1,3 @@
-try {
-  require("babel-polyfill");
-} catch(e) {
-  if(e.message.indexOf('only one instance of babel-polyfill is allowed') === -1) {
-    console.error(e)
-  }
-}
-
 const ecc = require('react-native-eosjs-ecc')
 const Fcbuffer = require('fcbuffer')
 const EosApi = require('react-native-eosjs-api')
@@ -13,29 +5,28 @@ const assert = require('assert')
 
 const Structs = require('./structs')
 const AbiCache = require('./abi-cache')
-const AssetCache = require('./asset-cache')
 const writeApiGen = require('./write-api')
 const format = require('./format')
 const schema = require('./schema')
 const pkg = require('../package.json')
 
-const configDefaults = {
-  broadcast: true,
-  debug: false,
-  sign: true
-}
+const Eos = (config = {}) => {
+  config = Object.assign({}, {
+    httpEndpoint: 'http://127.0.0.1:8888',
+    debug: false,
+    verbose: false,
+    broadcast: true,
+    sign: true
+  }, config)
 
-const Eos = (config = {}) => createEos(
-  Object.assign(
-    {},
-    {
-      apiLog: consoleObjCallbackLog(config.verbose),
-      transactionLog: consoleObjCallbackLog(config.verbose),
-    },
-    configDefaults,
-    config
-  )
-)
+  const defaultLogger = {
+    log: config.verbose ? console.log : null,
+    error: console.error
+  }
+  config.logger = Object.assign({}, defaultLogger, config.logger)
+
+  return createEos(config)
+}
 
 module.exports = Eos
 
@@ -70,17 +61,19 @@ Object.assign(
 
 
 function createEos(config) {
-  const network = EosApi(config)
+  const network = config.httpEndpoint != null ? EosApi(config) : null
   config.network = network
 
-  config.assetCache = AssetCache(network)
-  config.abiCache = AbiCache(network, config)
+  const abiCache = AbiCache(network, config)
+  config.abiCache = abiCache
 
   if(!config.chainId) {
     config.chainId = 'cf057bbfb72640471fd910bcb67639c22df9f92470936cddc1ade0e2f2e7dc4f'
   }
 
-  checkChainId(network, config.chainId)
+  if(network) {
+    checkChainId(network, config.chainId, config.logger)
+  }
 
   if(config.mockTransactions != null) {
     if(typeof config.mockTransactions === 'string') {
@@ -97,7 +90,12 @@ function createEos(config) {
     structs,
     types,
     fromBuffer,
-    toBuffer
+    toBuffer,
+    abiCache
+  }})
+
+  Object.assign(eos, {modules: {
+    format
   }})
 
   if(!config.signProvider) {
@@ -105,22 +103,6 @@ function createEos(config) {
   }
 
   return eos
-}
-
-function consoleObjCallbackLog(verbose = false) {
-  return (error, result, name) => {
-    if(error) {
-      if(name) {
-        console.error(name, 'error')
-      }
-      console.error(error);
-    } else if(verbose) {
-      if(name) {
-        console.log(name, 'reply:')
-      }
-      console.log(JSON.stringify(result, null, 4))
-    }
-  }
 }
 
 /**
@@ -133,7 +115,6 @@ function consoleObjCallbackLog(verbose = false) {
   @throw {TypeError} if a funciton name conflicts
 */
 function mergeWriteFunctions(config, EosApi, structs) {
-  assert(config.network, 'network instance required')
   const {network} = config
 
   const merge = Object.assign({}, network)
@@ -201,6 +182,15 @@ const defaultSignProvider = (eos, config) => async function({sign, buf, transact
     return sign(buf, pvt)
   }
 
+  // offline signing assumes all keys provided need to sign
+  if(config.httpEndpoint == null) {
+    const sigs = []
+    for(const key of keys) {
+      sigs.push(sign(buf, key.private))
+    }
+    return sigs
+  }
+
   const keyMap = new Map()
 
   // keys are either public or private keys
@@ -254,15 +244,19 @@ const defaultSignProvider = (eos, config) => async function({sign, buf, transact
   })
 }
 
-function checkChainId(network, chainId) {
+function checkChainId(network, chainId, logger) {
   network.getInfo({}).then(info => {
     if(info.chain_id !== chainId) {
-      console.warn(
-        'WARN: chainId mismatch, signatures will not match transaction authority. ' +
-        `expected ${chainId} !== actual ${info.chain_id}`
-      )
+      if(logger.error) {
+        logger.error(
+          'chainId mismatch, signatures will not match transaction authority. ' +
+          `expected ${chainId} !== actual ${info.chain_id}`
+        )
+      }
     }
   }).catch(error => {
-    console.error(error)
+    if(logger.error) {
+      logger.error(error)
+    }
   })
 }

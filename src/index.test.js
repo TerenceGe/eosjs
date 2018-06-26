@@ -16,7 +16,7 @@ describe('version', () => {
 
 describe('offline', () => {
   const headers = {
-    expiration: new Date().toISOString().split('.')[0],
+    expiration: new Date().toISOString().split('.')[0], // Don't use `new Date` in production
     ref_block_num: 1,
     ref_block_prefix: 452435776,
     net_usage_words: 0,
@@ -26,21 +26,58 @@ describe('offline', () => {
     transaction_extensions: []
   }
 
-  it('transaction', async function() {
-    const privateKey = await ecc.unsafeRandomKey()
 
+  it('multi-signature', async function() {
+    const transactionHeaders = (expireInSeconds, callback) => {
+      callback(null/*error*/, headers)
+    }
     const eos = Eos({
-      keyProvider: privateKey,
-      // httpEndpoint: 'https://doesnotexist.example.org',
-      transactionHeaders: (expireInSeconds, callback) => {
-        callback(null/*error*/, headers)
-      },
-      broadcast: false,
-      sign: true
+      keyProvider: [
+        ecc.seedPrivate('key1'),
+        ecc.seedPrivate('key2')
+      ],
+      httpEndpoint: null,
+      transactionHeaders
+    })
+
+    const trx = await eos.nonce(1, {authorization: 'inita'})
+
+    assert.equal(trx.transaction.signatures.length, 2, 'signature count')
+  })
+
+  it('transaction', async function() {
+    const eos = Eos({
+      keyProvider: wif,
+      httpEndpoint: null
+    })
+
+    const trx = await eos.transaction({
+      expiration: new Date().toISOString().split('.')[0], // Don't use `new Date` in production
+      ref_block_num: 1,
+      ref_block_prefix: 452435776,
+      actions: [{
+        account: 'eosio.null',
+        name: 'nonce',
+        authorization:[{
+          actor: 'inita',
+          permission: 'active'
+        }],
+        data: '0131' //hex
+      }]
+    })
+
+    assert.equal(trx.transaction.signatures.length, 1, 'signature count')
+  })
+
+  it('transactionHeaders object', async function() {
+    const eos = Eos({
+      keyProvider: wif,
+      httpEndpoint: null,
+      transactionHeaders: headers
     })
 
     const memo = ''
-    const trx = await eos.transfer('bankers', 'people', '1000000 SYS', memo)
+    const trx = await eos.transfer('few', 'many', '100.0000 SYS', memo)
 
     assert.deepEqual({
       expiration: trx.transaction.transaction.expiration,
@@ -53,8 +90,22 @@ describe('offline', () => {
       transaction_extensions: []
     }, headers)
 
-    assert.equal(trx.transaction.signatures.length, 1, 'expecting 1 signature')
+    assert.equal(trx.transaction.signatures.length, 1, 'signature count')
   })
+
+  it('abi', async function() {
+    const eos = Eos({httpEndpoint: null})
+
+    const abiBuffer = fs.readFileSync(`docker/contracts/eosio.bios/eosio.bios.abi`)
+    const abiObject = JSON.parse(abiBuffer)
+
+    assert.deepEqual(abiObject, eos.fc.abiCache.abi('eosio.bios', abiBuffer).abi)
+    assert.deepEqual(abiObject, eos.fc.abiCache.abi('eosio.bios', abiObject).abi)
+
+    const bios = await eos.contract('eosio.bios')
+    assert(typeof bios.newaccount === 'function', 'unrecognized contract')
+  })
+
 })
 
 // some transactions that don't broadcast may require Api lookups
@@ -78,10 +129,10 @@ if(process.env['NODE_ENV'] === 'development') {
       const opts = {sign: false, broadcast: false}
       const tx = await local.transaction(['currency', 'eosio.token'], ({currency, eosio_token}) => {
         // make sure {account: 'eosio.token', ..} remains first
-        eosio_token.transfer('inita', 'initd', '1.1 SYS', '')
+        eosio_token.transfer('inita', 'initd', '1.1000 SYS', '')
 
         // {account: 'currency', ..} remains second (reverse sort)
-        currency.transfer('inita', 'initd', '1.2 CUR', '')
+        currency.transfer('inita', 'initd', '1.2000 CUR', '')
 
       }, opts)
       assert.equal(tx.transaction.transaction.actions[0].account, 'eosio.token')
@@ -104,7 +155,7 @@ if(process.env['NODE_ENV'] === 'development') {
         await eos.setcode(account, 0, 0, wasm)
         await eos.setabi(account, JSON.parse(abi))
 
-        const code = await eos.getCode(account)
+        const code = await eos.getAbi(account)
 
         const diskAbi = JSON.parse(abi)
         delete diskAbi.____comment
@@ -157,7 +208,7 @@ if(process.env['NODE_ENV'] === 'development') {
 
       const eos = Eos({keyProvider})
 
-      return eos.transfer('inita', 'initb', '1 SYS', '', false).then(tr => {
+      return eos.transfer('inita', 'initb', '1.0000 SYS', '', false).then(tr => {
         assert.equal(tr.transaction.signatures.length, 1)
         assert.equal(typeof tr.transaction.signatures[0], 'string')
       })
@@ -175,7 +226,7 @@ if(process.env['NODE_ENV'] === 'development') {
 
       const eos = Eos({keyProvider})
 
-      return eos.transfer('inita', 'initb', '1.274 SYS', '', false).then(tr => {
+      return eos.transfer('inita', 'initb', '1.2740 SYS', '', false).then(tr => {
         assert.equal(tr.transaction.signatures.length, 1)
         assert.equal(typeof tr.transaction.signatures[0], 'string')
       })
@@ -202,7 +253,7 @@ if(process.env['NODE_ENV'] === 'development') {
 
       const eos = Eos({keyProvider})
 
-      return eos.transfer('inita', 'initb', '9 SYS', '', false).then(tr => {
+      return eos.transfer('inita', 'initb', '9.0000 SYS', '', false).then(tr => {
         assert.equal(tr.transaction.signatures.length, 1)
         assert.equal(typeof tr.transaction.signatures[0], 'string')
       })
@@ -212,12 +263,12 @@ if(process.env['NODE_ENV'] === 'development') {
       const keystore = Keystore('uid')
       keystore.deriveKeys({parent: wif})
       const eos = Eos({keyProvider: keystore.keyProvider})
-      return eos.transfer('inita', 'initb', '12 SYS', '', true)
+      return eos.transfer('inita', 'initb', '12.0000 SYS', '', true)
     })
 
     it('keyProvider return Promise', () => {
       const eos = Eos({keyProvider: new Promise(resolve => {resolve(wif)})})
-      return eos.transfer('inita', 'initb', '1.618 SYS', '', true)
+      return eos.transfer('inita', 'initb', '1.6180 SYS', '', true)
     })
 
     it('signProvider', () => {
@@ -233,7 +284,7 @@ if(process.env['NODE_ENV'] === 'development') {
         })
       }
       const eos = Eos({signProvider: customSignProvider})
-      return eos.transfer('inita', 'initb', '2 SYS', '', false)
+      return eos.transfer('inita', 'initb', '2.0000 SYS', '', false)
     })
 
     it('create asset', async function() {
@@ -256,16 +307,18 @@ if(process.env['NODE_ENV'] === 'development') {
           owner: pubkey,
           active: pubkey
         })
+
         tr.buyrambytes({
           payer: 'eosio',
           receiver: name,
           bytes: 8192
         })
+
         tr.delegatebw({
           from: 'eosio',
           receiver: name,
-          stake_net_quantity: '1.0000 SYS',
-          stake_cpu_quantity: '1.0000 SYS',
+          stake_net_quantity: '10.0000 SYS',
+          stake_cpu_quantity: '10.0000 SYS',
           transfer: 0
         })
       })
@@ -273,7 +326,7 @@ if(process.env['NODE_ENV'] === 'development') {
 
     it('mockTransactions pass', () => {
       const eos = Eos({signProvider, mockTransactions: 'pass'})
-      return eos.transfer('inita', 'initb', '1 SYS', '').then(transfer => {
+      return eos.transfer('inita', 'initb', '1.0000 SYS', '').then(transfer => {
         assert(transfer.mockTransaction, 'transfer.mockTransaction')
       })
     })
@@ -281,14 +334,14 @@ if(process.env['NODE_ENV'] === 'development') {
     it('mockTransactions fail', () => {
       const logger = { error: null }
       const eos = Eos({signProvider, mockTransactions: 'fail', logger})
-      return eos.transfer('inita', 'initb', '1 SYS', '').catch(error => {
+      return eos.transfer('inita', 'initb', '1.0000 SYS', '').catch(error => {
         assert(error.indexOf('fake error') !== -1, 'expecting: fake error')
       })
     })
 
     it('transfer (broadcast)', () => {
       const eos = Eos({signProvider})
-      return eos.transfer('inita', 'initb', '1 SYS', '')
+      return eos.transfer('inita', 'initb', '1.0000 SYS', '')
     })
 
     it('transfer custom token precision (broadcast)', () => {
@@ -298,12 +351,12 @@ if(process.env['NODE_ENV'] === 'development') {
 
     it('transfer custom authorization (broadcast)', () => {
       const eos = Eos({signProvider})
-      return eos.transfer('inita', 'initb', '1 SYS', '', {authorization: 'inita@owner'})
+      return eos.transfer('inita', 'initb', '1.0000 SYS', '', {authorization: 'inita@owner'})
     })
 
     it('transfer custom authorization sorting (no broadcast)', () => {
       const eos = Eos({signProvider})
-      return eos.transfer('inita', 'initb', '1 SYS', '',
+      return eos.transfer('inita', 'initb', '1.0000 SYS', '',
         {authorization: ['initb@owner', 'inita@owner'], broadcast: false}
       ).then(({transaction}) => {
         const ans = [
@@ -316,40 +369,39 @@ if(process.env['NODE_ENV'] === 'development') {
 
     it('transfer (no broadcast)', () => {
       const eos = Eos({signProvider})
-      return eos.transfer('inita', 'initb', '1 SYS', '', {broadcast: false})
+      return eos.transfer('inita', 'initb', '1.0000 SYS', '', {broadcast: false})
     })
 
     it('transfer (no broadcast, no sign)', () => {
       const eos = Eos({signProvider})
       const opts = {broadcast: false, sign: false}
-      return eos.transfer('inita', 'initb', '1 SYS', '', opts).then(tr =>
+      return eos.transfer('inita', 'initb', '1.0000 SYS', '', opts).then(tr =>
         assert.deepEqual(tr.transaction.signatures, [])
       )
     })
 
     it('transfer sign promise (no broadcast)', () => {
       const eos = Eos({signProvider: promiseSigner})
-      return eos.transfer('inita', 'initb', '1 SYS', '', false)
+      return eos.transfer('inita', 'initb', '1.0000 SYS', '', false)
     })
 
-    it('action to unknown contract', () => {
+    it('action to unknown contract', done => {
       const logger = { error: null }
-      return Eos({signProvider, logger}).contract('unknown432')
+      Eos({signProvider, logger}).contract('unknown432')
       .then(() => {throw 'expecting error'})
       .catch(error => {
-        assert(/unknown key/.test(error.toString()),
-          'expecting "unknown key" error action, instead got: ' + error)
+        done()
       })
     })
 
     it('action to contract', () => {
       return Eos({signProvider}).contract('eosio.token').then(token => {
-        return token.transfer('inita', 'initb', '1 SYS', '')
+        return token.transfer('inita', 'initb', '1.0000 SYS', '')
           // transaction sent on each command
           .then(tr => {
             assert.equal(1, tr.transaction.transaction.actions.length)
 
-            return token.transfer('initb', 'inita', '1 SYS', '')
+            return token.transfer('initb', 'inita', '1.0000 SYS', '')
               .then(tr => {assert.equal(1, tr.transaction.transaction.actions.length)})
           })
       }).then(r => {assert(r == undefined)})
@@ -360,8 +412,8 @@ if(process.env['NODE_ENV'] === 'development') {
       const eos = Eos({signProvider})
 
       const trTest = eosio_token => {
-        assert(eosio_token.transfer('inita', 'initb', amt + ' SYS', '') == null)
-        assert(eosio_token.transfer('initb', 'inita', (amt++) + ' SYS', '') == null)
+        assert(eosio_token.transfer('inita', 'initb', amt + '.0000 SYS', '') == null)
+        assert(eosio_token.transfer('initb', 'inita', (amt++) + '.0000 SYS', '') == null)
       }
 
       const assertTr = tr =>{
@@ -378,10 +430,10 @@ if(process.env['NODE_ENV'] === 'development') {
       const tn = Eos({signProvider})
       return tn.contract('eosio.token').then(eosio_token => {
         return eosio_token.transaction(tr => {
-          tr.transfer('inita', 'initb', '1 SYS', '')
-          tr.transfer('inita', 'initc', '2 SYS', '')
+          tr.transfer('inita', 'initb', '1.0000 SYS', '')
+          tr.transfer('inita', 'initc', '2.0000 SYS', '')
         }).then(() => {
-          return eosio_token.transfer('inita', 'initb', '3 SYS', '')
+          return eosio_token.transfer('inita', 'initb', '3.0000 SYS', '')
         })
       })
     })
@@ -389,8 +441,8 @@ if(process.env['NODE_ENV'] === 'development') {
     it('multi-action transaction (broadcast)', () => {
       const eos = Eos({signProvider})
       return eos.transaction(tr => {
-        assert(tr.transfer('inita', 'initb', '1 SYS', '') == null)
-        assert(tr.transfer({from: 'inita', to: 'initc', quantity: '1 SYS', memo: ''}) == null)
+        assert(tr.transfer('inita', 'initb', '1.0000 SYS', '') == null)
+        assert(tr.transfer({from: 'inita', to: 'initc', quantity: '1.0000 SYS', memo: ''}) == null)
       }).then(tr => {
         assert.equal(2, tr.transaction.transaction.actions.length)
       })
@@ -399,7 +451,7 @@ if(process.env['NODE_ENV'] === 'development') {
     it('multi-action transaction no inner callback', () => {
       const eos = Eos({signProvider})
       return eos.transaction(tr => {
-        tr.transfer('inita', 'inita', '1 SYS', '', cb => {})
+        tr.transfer('inita', 'inita', '1.0000 SYS', '', cb => {})
       })
       .then(() => {throw 'expecting rollback'})
       .catch(error => {
@@ -436,7 +488,7 @@ if(process.env['NODE_ENV'] === 'development') {
               data: {
                 from: 'inita',
                 to: 'initb',
-                quantity: '13 SYS',
+                quantity: '13.0000 SYS',
                 memo: '爱'
               },
               authorization: [{
@@ -449,9 +501,23 @@ if(process.env['NODE_ENV'] === 'development') {
         {broadcast: false}
       )
     })
+
+    it('custom contract transfer', async function() {
+      const eos = Eos({signProvider})
+      await eos.contract('currency').then(currency =>
+        currency.transfer('currency', 'inita', '1.0000 CUR', '')
+      )
+    })
   })
 
-  // ./eosioc set contract currency build/contracts/currency/currency.wasm build/contracts/currency/currency.abi
+  it('Transaction ABI cache', async function() {
+    const eos = Eos()
+    assert.throws(() => eos.fc.abiCache.abi('eosio'), /not cached/)
+    const abi = await eos.fc.abiCache.abiAsync('eosio')
+    assert.deepEqual(abi, await eos.fc.abiCache.abiAsync('eosio', false/*force*/))
+    assert.deepEqual(abi, eos.fc.abiCache.abi('eosio'))
+  })
+
   it('Transaction ABI lookup', async function() {
     const eos = Eos()
     const tx = await eos.transaction(
@@ -463,7 +529,7 @@ if(process.env['NODE_ENV'] === 'development') {
             data: {
               from: 'inita',
               to: 'initb',
-              quantity: '13 CUR',
+              quantity: '13.0000 CUR',
               memo: ''
             },
             authorization: [{
